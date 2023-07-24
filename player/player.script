@@ -1,0 +1,137 @@
+go.property('speed', 120)
+go.property('fireball_cooldown', 0.5)
+
+local config = require 'config'
+
+function init(self)
+	init_player(self)
+end
+
+function init_player(self)
+    msg.post('.', 'acquire_input_focus')
+    msg.post('#sprite', 'play_animation', {id = hash('player_simple')})
+    go.set_position(vmath.vector3(config.world.width/2, config.world.height/2, 0.5))
+
+    self.input = vmath.vector3(0,0,0)
+    self.exp = 0
+    self.level = 1
+    self.cursor = nil
+    self.current_fireball_cooldown = self.fireball_cooldown
+    self.right_hand_fireball = false
+    self.is_dual_wield_enabled = false
+    self.fireball_timer = nil
+
+    add_exp(self, 0)
+end
+
+function update(self, dt)
+    local self_pos = go.get_position()
+    if self.input then
+        local deltapos = self.input * self.speed * dt
+        local new_pos = self_pos + deltapos
+        if new_pos.x > config.world.borders_offset and new_pos.x < config.world.width - config.world.borders_offset
+            and new_pos.y > config.world.borders_offset and new_pos.y < config.world.height - config.world.borders_offset then
+            go.set_position(new_pos)
+        end
+        self.input = vmath.vector3(0,0,0)
+    end
+
+    if self.cursor then
+        sprite.set_hflip('#sprite', self_pos.x > self.cursor.x)
+    end
+end
+
+function on_message(self, message_id, message, sender)
+	-- print(message_id)
+    if message_id == hash('food_eaten') then
+        add_exp(self, config.food_exp)
+        msg.post('/main#script', 'food_eaten')
+    elseif message_id == hash('become_mage') then
+        become_mage(self)
+    elseif message_id == hash('enemy_killed') then
+        add_exp(self, message.exp)
+    elseif message_id == hash('attack_by_enemy') then
+        player_receive_damage(self, message.damage)
+    elseif message_id == hash('enable_dual_wield') then
+        self.is_dual_wield_enabled = true
+        timer.cancel(self.fireball_timer)
+        self.fireball_timer = timer.delay(self.fireball_cooldown / 2, true, shoot_fireball)
+    elseif message_id == hash('restart') then
+        init_player(self)
+    elseif message_id == hash('boss_killed') then
+        timer.cancel(self.fireball_timer)
+        msg.post('.', 'release_input_focus')
+    elseif message_id == hash('collision_response') then
+        if message.other_group == hash('iceball') then
+            local iceball_url = msg.url('default', message.other_id, 'script')
+            local damage = go.get(iceball_url, 'damage')
+            player_receive_damage(self, damage)
+        end
+    end
+end
+
+function on_input(self, action_id, action)
+    if action_id == hash('left') then
+        self.input.x = -1
+    elseif action_id == hash('right') then
+        self.input.x = 1
+    elseif action_id == hash('up') then
+        self.input.y = 1
+    elseif action_id == hash('down') then
+        self.input.y = -1
+    elseif action_id == hash('test') then
+        -- add_exp(self, config.level_exp_map[self.level] + 1 )
+        msg.post('/main#script', 'end_game')
+    end
+
+    if not action_id then
+        self.cursor = action
+    end
+end
+
+function add_exp(self, amount)
+    self.exp = self.exp + amount
+
+    if self.exp >= config.level_exp_map[self.level] then
+        handle_level_up(self)
+    end
+
+    msg.post('/gui#main', 'update_exp', {current = self.exp, max = config.level_exp_map[self.level]})
+end
+
+function player_receive_damage(self, amount)
+    self.exp = math.max(self.exp - amount, 0)
+
+    msg.post('/gui#main', 'update_exp', {current = self.exp, max = config.level_exp_map[self.level]})
+end
+
+function handle_level_up(self)
+    self.exp = self.exp - config.level_exp_map[self.level]
+    self.level = self.level + 1
+
+    msg.post('/gui#main', 'level_up')
+    msg.post('/main#script', 'player_level_up', {level = self.level})
+end
+
+function become_mage(self)
+    msg.post('#sprite', 'play_animation', {id = hash('player_wizard')})
+    self.fireball_timer = timer.delay(self.fireball_cooldown, true, shoot_fireball)
+end
+
+function shoot_fireball(self)
+    local target_angle = -math.atan2(self.cursor.x - go.get_position().x, self.cursor.y - go.get_position().y)
+    local target_quat = vmath.quat_rotation_z(target_angle)
+
+    local rotation = go.get_rotation()
+
+    if self.right_hand_fireball then
+        factory.create('/factory#fireball', go.get_position() + vmath.rotate(rotation, vmath.vector3(0, -10, 0)), target_quat, {}, 1)
+    else
+        factory.create('/factory#fireball', go.get_position() + vmath.rotate(rotation, vmath.vector3(0, 10, 0)), target_quat, {}, 1)
+    end
+
+    if self.is_dual_wield_enabled then
+        self.right_hand_fireball = not self.right_hand_fireball
+    end
+    self.current_fireball_cooldown = self.fireball_cooldown
+end

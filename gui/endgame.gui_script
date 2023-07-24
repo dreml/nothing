@@ -1,0 +1,32 @@
+function init(self)
+	self.white_box_node = gui.get_node('white_box')
+	self.text_start_node = gui.get_node('text_start')
+	self.text_end_node = gui.get_node('text_end')
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('end_game') then
+        gui.animate(self.white_box_node, gui.PROP_COLOR, vmath.vector4(1, 1, 1, 1), gui.EASING_LINEAR, 2, 0, show_text_start)
+    end
+end
+
+function show_text_start(self, node)
+    gui.animate(self.text_start_node, gui.PROP_COLOR, vmath.vector4(0, 0, 0, 1), gui.EASING_LINEAR, 2, 0, show_text_end)
+end
+
+function show_text_end(self, node)
+    gui.animate(self.text_end_node, gui.PROP_COLOR, vmath.vector4(0, 0, 0, 1), gui.EASING_LINEAR, 2, 3, end_game)
+end
+
+function end_game(self, node)
+    timer.delay(
+        5,
+        false,
+        function (self, handle, time_elapsed)
+            msg.post('/main#script', 'restart_game')
+            gui.animate(self.white_box_node, gui.PROP_COLOR, vmath.vector4(1, 1, 1, 0), gui.EASING_LINEAR, 2)
+            gui.animate(self.text_start_node, gui.PROP_COLOR, vmath.vector4(1, 1, 1, 0), gui.EASING_LINEAR, 2)
+            gui.animate(self.text_end_node, gui.PROP_COLOR, vmath.vector4(1, 1, 1, 0), gui.EASING_LINEAR, 2)
+        end
+    )
+end

@@ -1,0 +1,19 @@
+image: "/assets/iceball.png"
+tile_width: 84
+tile_height: 9
+tile_margin: 0
+tile_spacing: 0
+collision: ""
+material_tag: "tile"
+collision_groups: "fireball"
+animations {
+  id: "anim"
+  start_tile: 1
+  end_tile: 60
+  playback: PLAYBACK_LOOP_FORWARD
+  fps: 15
+  flip_horizontal: 0
+  flip_vertical: 0
+}
+extrude_borders: 0
+inner_padding: 0

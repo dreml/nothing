@@ -1,0 +1,43 @@
+go.property('speed', 300)
+go.property('damage', 10)
+
+function init(self)
+	-- Add initialization code here
+	-- Remove this function if not needed
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+    local current_position = go.get_position()
+    if current_position.x < -100 or current_position.x > 1000 or
+        current_position.y < -100 or current_position.y > 1000
+    then
+		go.delete()
+    end
+
+    local rotation = go.get_rotation()
+	local distance = self.speed * dt
+	local direction = vmath.rotate(rotation, vmath.vector3(0, distance, 0))
+	local new_position = go.get_position() + direction
+	go.set_position(new_position)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('collision_response') then
+        go.delete()
+    end
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Remove this function if not needed
+end

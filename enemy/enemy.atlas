@@ -1,0 +1,15 @@
+images {
+  image: "/assets/ENM_JUMPER.png"
+}
+images {
+  image: "/assets/ENM_SHOOTER.png"
+}
+images {
+  image: "/assets/food.png"
+}
+images {
+  image: "/assets/ENM_WALKER.png"
+}
+margin: 0
+extrude_borders: 2
+inner_padding: 0

@@ -1,0 +1,9 @@
+images {
+  image: "/assets/player_simple.png"
+}
+images {
+  image: "/assets/player_wizard.png"
+}
+margin: 0
+extrude_borders: 2
+inner_padding: 0

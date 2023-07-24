@@ -1,0 +1,61 @@
+go.property('max_health', 20)
+go.property('attack', 2)
+go.property('speed', 50)
+go.property('exp_amount', 5)
+
+
+function init(self)
+	self.current_health = self.max_health
+	self.is_dead = false
+	msg.post('#explosion', 'disable')
+end
+
+function update(self, dt)
+	if self.is_dead then
+		return
+	end
+
+	local targetPos = go.get_position('player')
+	local self_pos = go.get_position()
+
+	local target_angle = -math.atan2(targetPos.x - self_pos.x, targetPos.y - self_pos.y)
+	local target_quat = vmath.quat_rotation_z(target_angle)
+	-- TODO make jumps
+
+	go.set_rotation(target_quat)
+
+	-- move towards target
+	local d = vmath.rotate(target_quat, vmath.vector3(0, 1, 0))
+	go.set_position(self_pos + d * self.speed * dt)
+
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('collision_response') then
+		if message.other_group == hash('player') then
+			msg.post('/player#script', 'attack_by_enemy', {damage = self.attack})
+			msg.post('.', 'disable')
+		elseif message.other_group == hash('fireball') then
+			local fireball_url = msg.url('default', message.other_id, 'script')
+			local damage = go.get(fireball_url, 'damage')
+			handle_damage(self, damage)
+		end
+	elseif message_id == hash('animation_done') and sender.fragment == hash('explosion') then
+        msg.post('.', 'disable')
+	end
+end
+
+-- also works in shooter.script
+function handle_damage(self, amount)
+	self.current_health = self.current_health - amount
+	if self.current_health <= 0 then
+		msg.post('/player#script', 'enemy_killed', {exp = self.exp_amount})
+		msg.post('#collision', 'disable')
+		msg.post('#sprite', 'disable')
+		self.is_dead = true
+		msg.post('#explosion', 'enable')
+		msg.post('#explosion', 'play_animation', {id = hash('anim')})
+	else
+		go.animate('#sprite', 'tint', go.PLAYBACK_ONCE_PINGPONG, vmath.vector4(1, 1, 1, 0.2), go.EASING_LINEAR, 0.4)
+	end
+end

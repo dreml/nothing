@@ -1,0 +1,88 @@
+go.property('max_health', 60)
+go.property('attack', 50)
+go.property('speed', 40)
+go.property('exp_amount', 30)
+go.property('shoot_distance', 50000)
+go.property('iceball_cooldown', 1)
+
+function init(self)
+	self.current_health = self.max_health
+	self.current_iceball_cooldown = self.iceball_cooldown
+	self.is_dead = false
+
+	msg.post('#explosion', 'disable')
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+	if self.is_dead then
+		return
+	end
+
+	local targetPos = go.get_position('player')
+	local selfPos = go.get_position()
+
+	sprite.set_hflip('#sprite', targetPos.x < selfPos.x)
+
+	self.current_iceball_cooldown = self.current_iceball_cooldown - dt
+
+	local target_angle = -math.atan2(targetPos.x - selfPos.x, targetPos.y - selfPos.y)
+	local target_quat = vmath.quat_rotation_z(target_angle)
+
+	local distance_square = math.pow(targetPos.x - selfPos.x, 2) + math.pow(targetPos.y - selfPos.y, 2);
+
+	if distance_square > self.shoot_distance then
+		-- move towards target
+		local d = vmath.rotate(target_quat, vmath.vector3(0, 1, 0))
+		go.set_position(selfPos + d * self.speed * dt)
+	else
+		shoot_iceball(self)
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('collision_response') then
+		if message.other_group == hash('player') then
+			msg.post('/player#script', 'attack_by_enemy', {damage = self.attack})
+			self.is_dead = true
+			msg.post('.', 'disable')
+		elseif message.other_group == hash('fireball') then
+			local fireball_url = msg.url('default', message.other_id, 'script')
+			local damage = go.get(fireball_url, 'damage')
+			handle_damage(self, damage)
+		end
+	elseif message_id == hash("animation_done") and sender.fragment == hash('explosion') then
+		msg.post('.', 'disable')
+	end
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Remove this function if not needed
+end
+
+function shoot_iceball(self)
+	if self.current_iceball_cooldown > 0 then
+		return
+	end
+
+	local target_pos = go.get_position('player')
+
+	local target_angle = -math.atan2(target_pos.x - go.get_position().x, target_pos.y - go.get_position().y)
+	local target_quat = vmath.quat_rotation_z(target_angle)
+
+	local rotation = go.get_rotation()
+
+	factory.create('/factory#iceball', go.get_position() + vmath.rotate(rotation, vmath.vector3(0, -10, 0)), target_quat, {}, 1)
+
+	self.current_iceball_cooldown = self.iceball_cooldown
+end

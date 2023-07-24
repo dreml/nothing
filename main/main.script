@@ -1,0 +1,169 @@
+local config = require 'config'
+
+function init(self)
+	msg.post('.', 'acquire_input_focus')
+	msg.post('@render:', 'use_fixed_fit_projection', { near = -1, far = 1 })
+
+	self.explosions = {}
+
+	config_random()
+	restart_game(self)
+end
+
+function restart_game(self)
+	msg.post('/player', 'restart')
+	msg.post('/boss/boss_eye', 'restart')
+
+	self.food_count = 0
+	self.food_spawn_timer = nil
+	timer.delay(
+		config.delay_from_game_begin,
+		false,
+		function(self, handle, time_elapsed)
+			self.food_spawn_timer = timer.delay(config.food_spawn_cooldown, true, spawn_food)
+		end
+	)
+
+	go.animate('/background#sprite', 'tint', go.PLAYBACK_ONCE_FORWARD, vmath.vector4(1, 1, 1, 0), go.EASING_LINEAR, 0)
+
+	if self.enemies then
+		for i, enemy in ipairs(self.enemies) do
+			go.delete(enemy)
+		end
+	end
+
+	self.enemies = {}
+
+	stop_timers(self)
+
+	self.enemy_triangle_timer = nil
+	self.enemy_walker_timer = nil
+	self.enemy_shooter_timer = nil
+
+	create_explosions(self)
+end
+
+function create_explosions(self)
+	if self.explosions then
+		for i,explosion in ipairs(self.explosions) do
+			go.delete(explosion)
+		end
+	end
+
+	for i=1, config.explosions_count do
+		local position = vmath.vector3(
+			math.random(30, config.world.width - 30),
+			math.random(30, config.world.height - 30),
+			1
+		)
+
+		local explosion = factory.create('/factory#explosion', position)
+		table.insert(self.explosions, explosion)
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('food_eaten') then
+		self.food_count = self.food_count - 1
+	elseif message_id == hash('player_level_up') then
+		handle_player_level_up(self, message.level)
+	elseif message_id == hash('end_game') then
+		for i,explosion in ipairs(self.explosions) do
+			msg.post(explosion, 'end_game')
+		end
+
+		timer.delay(
+			4,
+			false,
+			function(self, handle, time_elapsed)
+				msg.post('/gui#endgame', 'end_game')
+			end
+		)
+	elseif message_id == hash('restart_game') then
+		restart_game(self)
+	end
+end
+
+function config_random()
+	math.randomseed(os.clock()*100000000000)
+	math.random()
+	math.random()
+	math.random()
+	math.random()
+	math.random()
+	math.random()
+	math.random()
+end
+
+function spawn_food(self)
+	if self.food_count >= config.max_food_count then
+		return
+	end
+
+	local position = vmath.vector3(
+		math.random(30, config.world.width - 30),
+		math.random(30, config.world.height - 30),
+		1
+	)
+
+	factory.create('/factory#food', position)
+	self.food_count = self.food_count + 1
+end
+
+function handle_player_level_up(self, level)
+	if level == 2 then
+		go.animate('/background#sprite', 'tint', go.PLAYBACK_ONCE_FORWARD, vmath.vector4(1, 1, 1, 1), go.EASING_LINEAR, 0.5)
+		self.enemy_triangle_timer = timer.delay(config.enemy_triangle_spawn_cooldown, true, spawn_enemy_triangle)
+	elseif level == 3 then
+		msg.post('/player#script', 'become_mage')
+		timer.cancel(self.food_spawn_timer)
+	elseif level == 4 then
+		timer.cancel(self.enemy_triangle_timer)
+		self.enemy_walker_timer = timer.delay(config.enemy_walker_spawn_cooldown, true, spawn_enemy_walker)
+		-- меняем спрайт с треугольников на врагов и добавляем препятствия
+	elseif level == 5 then
+		msg.post('/player#script', 'enable_dual_wield')
+	elseif level == 6 then
+		self.enemy_shooter_timer = timer.delay(config.enemy_shooter_spawn_cooldown, true, spawn_enemy_shooter)
+	elseif level == 7 then
+		spawn_boss(self)
+	end
+end
+
+function spawn_enemy_triangle(self, handle, time_elapsed)
+	local spawn_point = config.enemy_spawn_points[math.random(1, table.getn(config.enemy_spawn_points))]
+	local enemy = factory.create('/factory#enemy_triangle', spawn_point)
+	table.insert(self.enemies, enemy)
+end
+
+function spawn_enemy_walker(self, handle, time_elapsed)
+	local spawn_point = config.enemy_spawn_points[math.random(1, table.getn(config.enemy_spawn_points))]
+	local enemy = factory.create('/factory#enemy_walker', spawn_point)
+	table.insert(self.enemies, enemy)
+end
+
+function spawn_enemy_shooter(self, handle, time_elapsed)
+	local spawn_point = config.enemy_spawn_points[math.random(1, table.getn(config.enemy_spawn_points))]
+	local enemy = factory.create('/factory#enemy_shooter', spawn_point)
+	table.insert(self.enemies, enemy)
+end
+
+function spawn_boss(self)
+	stop_timers(self)
+	msg.post('default:/boss/boss_eye', 'spawn_boss')
+end
+
+function stop_timers(self)
+	if self.enemy_triangle_timer then
+		timer.cancel(self.enemy_triangle_timer)
+	end
+
+	if self.enemy_walker_timer then
+		timer.cancel(self.enemy_walker_timer)
+	end
+
+	if self.enemy_shooter_timer then
+		pprint(self.enemy_shooter_timer)
+		timer.cancel(self.enemy_shooter_timer)
+	end
+end

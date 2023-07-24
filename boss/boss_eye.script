@@ -1,0 +1,87 @@
+go.property('max_health', 200)
+
+function init(self)
+	msg.post('#collision', 'disable')
+
+	restart_boss(self)
+end
+
+function update(self, dt)
+	local target_pos = go.get_position('default:/player')
+	local self_pos = go.get_position()
+
+	local target_angle = -math.atan2(target_pos.x - self_pos.x, target_pos.y - self_pos.y)
+	local target_quat = vmath.quat_rotation_z(target_angle)
+
+	go.set_rotation(target_quat)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('restart') then
+		restart_boss(self)
+	elseif message_id == hash('spawn_boss') then
+		go.animate('/boss/boss', 'position', go.PLAYBACK_ONCE_FORWARD, vmath.vector3(480, 670, 0), go.EASING_LINEAR, 3)
+		go.animate('.', 'position', go.PLAYBACK_ONCE_FORWARD, vmath.vector3(480, 670, 0.1), go.EASING_LINEAR, 3)
+		msg.post('#collision', 'enable')
+		self.current_health = self.max_health
+	elseif message_id == hash('collision_response') then
+		if message.other_group == hash('fireball') then
+			local fireball_url = msg.url('default', message.other_id, 'script')
+			local damage = go.get(fireball_url, 'damage')
+			receive_damage(self, damage)
+		end
+	end
+end
+
+function restart_boss(self)
+	go.set_position(vmath.vector3(480, 1000, 0))
+	go.set_position(vmath.vector3(480, 1000, 0), '/boss/boss')
+
+	msg.post('/boss/explosion', 'disable')
+	msg.post('/boss/explosion1', 'disable')
+	msg.post('/boss/explosion2', 'disable')
+	msg.post('/boss/explosion3', 'disable')
+end
+
+function receive_damage(self, amount)
+	self.current_health = self.current_health - amount
+	if self.current_health <= 0 then
+		msg.post('default:/player#script', 'boss_killed')
+		-- go.animate('.', 'position', go.PLAYBACK_ONCE_FORWARD, vmath.vector3(480, 1000, 0), go.EASING_LINEAR, 4)
+		play_explosions(self)
+		msg.post('default:/main#script', 'end_game')
+		-- go.animate(
+		-- 	'/boss/boss',
+		-- 	'position',
+		-- 	go.PLAYBACK_ONCE_FORWARD,
+		-- 	vmath.vector3(480, 1000, 0),
+		-- 	go.EASING_LINEAR,
+		-- 	4,
+		-- 	0,
+		-- 	function (self, url, property)
+		-- 		msg.post('default:/main#script', 'end_game')
+		-- 		self.current_health = self.max_health
+		-- 	end
+		-- )
+	else
+		go.animate('#sprite', 'tint', go.PLAYBACK_ONCE_PINGPONG, vmath.vector4(1, 1, 1, 0.2), go.EASING_LINEAR, 0.4)
+	end
+end
+
+function play_explosions(self)
+	msg.post('/boss/explosion1', 'enable')
+	msg.post('/boss/explosion1#sprite', 'play_animation', {id = hash('endless')})
+	msg.post('/boss/explosion2', 'enable')
+	msg.post('/boss/explosion2#sprite', 'play_animation', {id = hash('endless')})
+
+	timer.delay(
+		1,
+		false,
+		function (self, handle, time)
+			msg.post('/boss/explosion', 'enable')
+			msg.post('/boss/explosion#sprite', 'play_animation', {id = hash('endless')})
+			msg.post('/boss/explosion3', 'enable')
+			msg.post('/boss/explosion3#sprite', 'play_animation', {id = hash('endless')})
+		end
+	)
+end
